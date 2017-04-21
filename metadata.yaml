@@ -28,3 +28,8 @@ requires:
 peers:
   cluster:
     interface: heat-ha
+provides:
+  nrpe-external-master:
+    interface: nrpe-external-master
+    scope: container
+
