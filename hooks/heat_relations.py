@@ -91,6 +91,7 @@ from heat_utils import (
     REQUIRED_INTERFACES,
     setup_ipv6,
     VERSION_PACKAGE,
+    services,
 )
 
 from heat_context import (
@@ -106,6 +107,8 @@ from charmhelpers.contrib.openstack.cert_utils import (
     get_certificate_request,
     process_certificates,
 )
+
+from charmhelpers.contrib.charmsupport import nrpe
 
 hooks = Hooks()
 CONFIGS = register_configs()
@@ -150,6 +153,7 @@ def config_changed():
 
     CONFIGS.write_all()
     configure_https()
+    update_nrpe_config()
 
     for rid in relation_ids('cluster'):
         cluster_joined(relation_id=rid)
@@ -180,6 +184,7 @@ def upgrade_charm():
                 # now we just delete the file
                 os.remove(encryption_path)
     leader_elected()
+    update_nrpe_config()
 
 
 @hooks.hook('amqp-relation-joined')
@@ -447,6 +452,20 @@ def certs_joined(relation_id=None):
 def certs_changed(relation_id=None, unit=None):
     process_certificates('heat', relation_id, unit)
     configure_https()
+
+
+@hooks.hook('nrpe-external-master-relation-joined',
+            'nrpe-external-master-relation-changed')
+def update_nrpe_config():
+    # python-dbus is used by check_upstart_job
+    apt_install('python-dbus')
+    hostname = nrpe.get_nagios_hostname()
+    current_unit = nrpe.get_nagios_unit_name()
+    nrpe_setup = nrpe.NRPE(hostname=hostname)
+    nrpe.copy_nrpe_checks()
+    nrpe.add_init_service_checks(nrpe_setup, services(), current_unit)
+    nrpe.add_haproxy_checks(nrpe_setup, current_unit)
+    nrpe_setup.write()
 
 
 def main():
